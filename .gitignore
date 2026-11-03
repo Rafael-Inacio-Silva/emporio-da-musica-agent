@@ -1,0 +1,21 @@
+# Secrets
+.env
+
+# Local-only material (instructions, study notes, challenge statement)
+CLAUDE.md
+ESTUDO.md
+desafio_tecnico_ai_eng_artefact.pdf
+
+# Support tickets written at runtime
+tickets/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+
+# Editors and OS
+.idea/
+.vscode/
+.DS_Store
