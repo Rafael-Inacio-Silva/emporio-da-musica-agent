@@ -8,7 +8,7 @@ Prototype of a text-message customer service agent for **Empório da Música**, 
 
 Built for the Artefact AI Engineer technical challenge.
 
-**Status:** step 1 of 6 (project structure and data handling).
+**Status:** step 2 of 6 (tools and business rules, no LLM yet).
 
 ## 2. How to run
 
@@ -38,12 +38,33 @@ Environment variables (`.env.example`):
 
 ## 3. Technical decisions
 
+### Agent tools
+
+The agent has five tools, implemented in `emporio/tools.py`:
+
+| Tool | What it does |
+|---|---|
+| `search_products` | Searches by text, category, brand or maximum price, ignoring accents and case ("violao" finds "Violão"). Returns up to 10 products, available ones first, with list price, active promotion, stock and availability (`available`, `out_of_stock`, `discontinued`, `coming_soon`). |
+| `get_order_status` | Requires order number **and** purchase e-mail. Returns status, dates, items, tracking code and, for delivered orders, the return and exchange deadlines already computed. |
+| `list_active_promotions` | Lists active promotions with original price, promotional price and discount (policy 6.2). |
+| `get_price_quote` | For a `product_id` and quantity: PIX, debit and boleto totals, valid credit card installments, whether payment methods can be combined, and shipping for the given city. |
+| `create_support_ticket` | Records a complaint, return/exchange request, data deletion request or uncovered policy question in `tickets/tickets.jsonl` (outside Git) and returns a protocol number and response deadline. |
+
+Decisions:
+
+- **Business rules live in code, not in the model.** PIX discount, installment tiers, shipping, promotion prices, return windows and business-hour deadlines are pure functions in `emporio/rules.py`, each citing its policy item. The model only picks a tool and fills its arguments. *Alternative discarded:* letting the model apply the policy text to compute prices, which is cheaper to build but can produce wrong numbers with full confidence.
+- **Tools receive identifiers, never business values.** `get_price_quote` takes a `product_id`, not a price, and reads price and promotion from the data. A price typed or hallucinated by the model can never enter a calculation.
+- **Pydantic validation, errors returned to the model.** Each tool has an argument model with `extra="forbid"` and value constraints (e.g. quantity from 1 to 20). `execute_tool` returns validation errors as the tool result, so the model can correct its call instead of the program crashing.
+- **Privacy by design (policy 9).** A wrong e-mail gets exactly the same answer as a non-existent order, so the tool never confirms that an order exists. Results never include phone, e-mail, address or customer id.
+- **Deterministic time.** Tools receive "now" from the code (`ToolContext.now`, in `America/Campo_Grande`), never from the model, which makes tests reproducible. Opening hours skip Sundays and national and Mato Grosso do Sul holidays (`holidays` library).
+- **Category as an enum.** `search_products` accepts only the nine category names from `categories.csv` (a test keeps them in sync), so the model cannot filter by a misspelled category.
+
 ### Data handling
 
 - **pandas, loaded once at startup.** The dataset is small (under 200 rows), so an in-memory DataFrame is enough and keeps the project easy to run. In production the natural step is SQLite or Postgres, because stock changes in real time.
 - **Fail fast on structural problems, clean and log content problems.** Missing columns, duplicated ids, unknown statuses, broken references between tables and unparseable dates raise `DataValidationError` at startup, so the agent never answers from data it cannot trust. Problems with a safe fix (a malformed tracking code) are cleaned and logged. *Alternative discarded:* silently dropping bad rows, which would hide data errors from the team.
 - **Data minimization.** The customer phone number is not loaded at all, since no answer needs it (LGPD, policy 9).
-- **Money as `float`, rounded on output.** Values have at most two decimals and calculations are simple percentages. *Alternative discarded:* `Decimal`, which adds conversion noise with no practical gain at this scale.
+- **Money stored as `float`, rounded with `Decimal`.** Values are kept as `float` in the DataFrames, but every rounding to cents goes through `rules.round_money`, which uses `Decimal` with half-up rounding. Plain `round()` on floats can round a half cent down (`round(2.675, 2) == 2.67`), and R$ 151,905 must show as R$ 151,91. *Alternative discarded:* `Decimal` columns everywhere, which adds conversion noise with no practical gain at this scale.
 
 File renames: the original CSVs were named `desafio_tecnico_ai_eng - <table>.csv`. They were renamed to `categories.csv`, `customers.csv`, `order_items.csv`, `orders.csv`, `products.csv` and `promotions.csv` to avoid spaces in paths. Content was not changed. The policy manual keeps its original name, `data/políticas_da_loja.pdf`.
 
@@ -73,11 +94,23 @@ Checked with no problems found: duplicated ids, references between tables (order
 - **Purchase channel.** There is no channel column. All orders in `orders.csv` are assumed to be online purchases, since they have delivery dates and tracking codes.
 - **Active promotion.** Promotions have no start or end date, so "active" means `is_active = 1`.
 - **Fictional e-mail domains.** Customer e-mails use made-up domains (`jmail.com`, `coldmail.com`, `inlook.com`, `hayoo.com.br`). They are kept exactly as provided, since order verification compares the e-mail the customer types with the stored one.
+- **Preference exchange period.** Policy 4.3 says "up to 7 days" without saying from when. It is counted from delivery, like the withdrawal right (4.1), which is the customer-friendly reading.
+- **Installment minimums.** The table in section 3 says "minimum installment R$ 100", while 3.1 sets tiers (2x–3x: R$ 50; 4x–6x: R$ 80; 7x–12x: R$ 100). The more specific rule, 3.1, is applied. 1x is always allowed.
+- **Free local shipping at exactly R$ 500.** Policy 5.1 covers "above" and "below" R$ 500 but not exactly R$ 500; it is treated as free shipping.
+- **Metropolitan region.** Policy 5.1 applies to the metropolitan region of Campo Grande, but the data does not list its cities. Only Campo Grande gets the local rule; any other city gets the carrier options of 5.2.
+- **Large instruments.** Categories "Baterias e Percussão", "Teclados e Pianos" and "Cordas Orquestrais" are flagged as possibly needing a special shipping quote (policy 5.2 mentions acoustic drums, digital pianos and double basses).
+- **Price filter.** `max_price` compares against the current price (promotional price when there is an active promotion), since that is what the customer pays.
+- **Shipping in totals.** Quote totals include the shipping fee only when it is known (Campo Grande). PIX applies to the products only; the fee is added after the discount.
+- **Ticket deadline.** Policy 7.3 sets 24 business hours for complaints. The same deadline is used for every ticket type, since the policy gives no other.
 - **Reference date.** Orders go from 2025-10-15 to 2026-03-22. Deadlines such as the 7-day return window only make sense close to that period, so `REFERENCE_DATE` can fix "today" for demonstrations.
 
 ## 5. Testing
 
-`pytest` covers the data loader: real data loads with the expected types, every product has a brand and category, the phone is not loaded, tracking codes follow policy 5.3, and broken files (missing file, duplicated id, unknown status, broken reference, two active promotions, bad date) are rejected.
+`pytest` runs 110 deterministic tests, no API key needed:
+
+- **Data loader** (`tests/test_data_loader.py`): real data loads with the expected types, every product has a brand and category, the phone is not loaded, tracking codes follow policy 5.3, and broken files (missing file, duplicated id, unknown status, broken reference, two active promotions, bad date) are rejected.
+- **Business rules** (`tests/test_rules.py`): PIX and promotional prices with half-up rounding, every installment tier boundary, combined payment above R$ 2,000, local shipping fee, return windows on the last valid day and the day after, opening hours including Sundays and holidays, and 24 business-hour deadlines across weekends.
+- **Tools** (`tests/test_tools.py`): each tool against the real data, including the challenge scenarios (guitars up to R$ 1,000, Takamine GD20, return of a delivered order), privacy (wrong e-mail looks exactly like a missing order), invalid arguments returned as errors, and JSON-serializable results.
 
 ## 6. Example conversations
 
@@ -86,6 +119,10 @@ Checked with no problems found: duplicated ids, references between tables (order
 ## 7. Known limitations and next steps
 
 - Product descriptions 135–144 contradict the product names (see data issue 2).
+- Text search matches words in the product name, brand and category. It is not semantic: "violão para iniciante" needs the model to search by category and read the descriptions. Next step: embeddings or a full-text index if the catalog grows.
+- Only Campo Grande gets the local shipping rule; the other cities of the metropolitan region are not listed in the data.
+- Shipping prices for other cities need the carriers' APIs (CEP, weight and dimensions).
+- Municipal holidays and extended hours on special dates are not modeled.
 
 ## 8. AI coding assistant usage
 
