@@ -8,7 +8,7 @@ Prototype of a text-message customer service agent for **Empório da Música**, 
 
 Built for the Artefact AI Engineer technical challenge.
 
-**Status:** step 3 of 6 (agent loop with the OpenAI Responses API; the terminal interface comes in step 4).
+**Status:** step 4 of 6 (agent with a local chat page; example conversations come in step 5).
 
 ## 2. How to run
 
@@ -20,6 +20,16 @@ source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 cp .env.example .env             # then fill in OPENAI_API_KEY
 ```
+
+Start the chat:
+
+```bash
+python -m emporio                # then open http://localhost:8000
+```
+
+Use `--port 8080` if port 8000 is taken. Turn on **Mostrar ferramentas** at the top of the page to see which tools the agent called for each answer. **Nova conversa** starts over with an empty history.
+
+To try the order and return scenarios, which use orders from 2025-10 to 2026-03, fix the date in `.env`, for example `REFERENCE_DATE=2026-02-20`.
 
 Run the tests:
 
@@ -77,6 +87,10 @@ The challenge asks the agent to know *when to query data and when to query polic
 
 *Alternative discarded:* RAG over the manual. For a document this short it adds an embedding step, a vector store and the risk of retrieving the wrong section. It becomes the right choice if the manual grows.
 
+**Product search** is keyword search over the product name, brand, category and description, ignoring accents and case. Every word of the query must match. The model does the "semantic" part: it turns the customer's sentence into a few search words and, if a search returns nothing, tries again with fewer words. "Violão bom para iniciante" becomes `query="iniciante", category="Violões"` and finds the models whose description says "iniciantes".
+
+*Alternative discarded:* embeddings (semantic search). With a catalog this small, keyword search finds every product, and the results are exact and easy to test. Embeddings would add an API call or a local model, a vector store to rebuild when the catalog changes, and "similar" matches that can mix up close models such as the D-28 and the D-28E, which is risky when the answer is a price. The next step for a larger catalog would be hybrid search: keywords plus embeddings.
+
 ### Prompt strategy
 
 - **Three Markdown files** in `prompts/`, outside the Python code:
@@ -89,9 +103,26 @@ The challenge asks the agent to know *when to query data and when to query polic
 - **Instructions in English, customer-facing text in Portuguese.** The policies stay in Portuguese, and the agent always answers in Brazilian Portuguese.
 - **The five steps are a guide, not a script.** A customer who opens with a direct question gets a direct answer, without a forced greeting.
 
+### Interface
+
+A chat page in the browser, served locally by `python -m emporio` (`emporio/web.py` and `emporio/static/`).
+
+- **Standard library only.** The server is Python's `http.server`, and the page is plain HTML, CSS and JavaScript: no framework, no `npm install`, no extra Python dependency. The page sends each message to `POST /api/message` and shows the answer.
+- **"Mostrar ferramentas" replaces a `--debug` flag.** It shows the tool calls of each answer, e.g. `> tool: get_price_quote(product_id=81, quantity=1, city="Campo Grande")`, which is the evidence that the agent knows when to query data.
+- **Safe by default.**
+  - The server listens only on `127.0.0.1`.
+  - Answers are inserted with `textContent`, never as HTML.
+  - Messages are limited to 2,000 characters.
+  - Only the three page files can be served.
+- **The agent does not change.** The page is a thin layer over `Agent.reply()`, so a WhatsApp integration would replace only this layer.
+
+*Alternatives discarded:*
+- **Terminal chat**, the original plan. It is simpler, but harder to demo and read: long product lists and tool calls are clearer in chat bubbles.
+- **Streamlit or Gradio.** They are quick to build, but add a heavy dependency and control the layout.
+
 ### Conversation history
 
-In memory, as the list of input items in `Agent.history`, for the lifetime of the session: in the prototype, one session is one conversation. Within it the agent remembers everything, including tool results. For example, a customer who already verified an order is not asked for the e-mail again. Nothing is kept after the session ends; see [limitations](#7-known-limitations-and-next-steps).
+In memory, as the list of input items in `Agent.history`. Each browser tab has its own conversation id and its own `Agent`. The server keeps up to 200 conversations and drops the oldest beyond that, so memory stays bounded. Within it the agent remembers everything, including tool results. For example, a customer who already verified an order is not asked for the e-mail again. Nothing is kept after the server stops; see [limitations](#7-known-limitations-and-next-steps).
 
 ### Agent tools
 
@@ -99,7 +130,7 @@ The agent has five tools, implemented in `emporio/tools.py`:
 
 | Tool | What it does |
 |---|---|
-| `search_products` | Searches by text, category, brand or maximum price, ignoring accents and case ("violao" finds "Violão"). Returns up to 10 products, available ones first, with list price, active promotion, stock and availability (`available`, `out_of_stock`, `discontinued`, `coming_soon`). |
+| `search_products` | Searches by text (name, brand, category and description), category, brand or maximum price, ignoring accents and case ("violao" finds "Violão"). Returns up to 10 products, available ones first, with list price, active promotion, stock and availability (`available`, `out_of_stock`, `discontinued`, `coming_soon`). |
 | `get_order_status` | Requires order number **and** purchase e-mail. Returns status, dates, items, tracking code and, for delivered orders, the return and exchange deadlines already computed. |
 | `list_active_promotions` | Lists active promotions with original price, promotional price and discount (policy 6.2). |
 | `get_price_quote` | For a `product_id` and quantity: PIX, debit and boleto totals, valid credit card installments, whether payment methods can be combined, and shipping for the given city. |
@@ -164,7 +195,7 @@ Checked with no problems found: duplicated ids, references between tables (order
 
 ## 5. Testing
 
-`pytest` runs 143 deterministic tests, no API key needed:
+`pytest` runs 161 deterministic tests, no API key needed:
 
 - **Data loader** (`tests/test_data_loader.py`): real data loads with the expected types, every product has a brand and category, the phone is not loaded, tracking codes follow policy 5.3, and broken files (missing file, duplicated id, unknown status, broken reference, two active promotions, bad date) are rejected.
 - **Business rules** (`tests/test_rules.py`): PIX and promotional prices with half-up rounding, every installment tier boundary, combined payment above R$ 2,000, local shipping fee, return windows on the last valid day and the day after, opening hours including Sundays and holidays, and 24 business-hour deadlines across weekends.
@@ -184,6 +215,14 @@ Checked with no problems found: duplicated ids, references between tables (order
   - open/closed status and when the team is back, converted to Campo Grande time;
   - key facts from the PDF present in `policies.md`;
   - `.env` parsing, the reference date, and the key hidden from `repr`.
+- **Chat page** (`tests/test_web.py`): uses a fake agent. It covers:
+  - the answer and the formatted tool calls returned to the page;
+  - history kept within a conversation, and two conversations kept apart;
+  - empty, oversized or malformed messages rejected with HTTP 400;
+  - the oldest conversation dropped beyond the limit;
+  - the page served from a real server on a free port;
+  - unknown paths answered with 404;
+  - the server listening only on `127.0.0.1`.
 
 The model's own behavior (choosing tools, applying policies, tone) is shown in the [example conversations](#6-example-conversations), generated by running the real agent.
 
@@ -194,11 +233,11 @@ The model's own behavior (choosing tools, applying policies, tone) is shown in t
 ## 7. Known limitations and next steps
 
 - Product descriptions 135–144 contradict the product names (see data issue 2).
-- Text search matches words in the product name, brand and category. It is not semantic: "violão para iniciante" needs the model to search by category and read the descriptions. Next step: embeddings or a full-text index if the catalog grows.
+- Text search matches words, not meaning: a synonym that appears in no product text ("pra começar" instead of "iniciante") depends on the model choosing better search words. Next step: hybrid search with embeddings if the catalog grows.
 - Only Campo Grande gets the local shipping rule; the other cities of the metropolitan region are not listed in the data.
 - Shipping prices for other cities need the carriers' APIs (CEP, weight and dimensions).
 - Municipal holidays and extended hours on special dates are not modeled.
-- **Conversation memory across sessions.** History lives in memory and ends with the session. In production it would be persisted per WhatsApp number, linked to a verified customer, with a retention period and deletion on request (LGPD, policy 9).
+- **Conversation memory across sessions.** History lives in memory and ends when the server stops. In production it would be persisted per WhatsApp number, linked to a verified customer, with a retention period and deletion on request (LGPD, policy 9).
 - **Model routing.** One model answers every message. At larger volume, a cheap router could send simple questions (opening hours) to Luna and complex ones (returns, complaints) to a larger model. At this scale a single model is simpler and more reliable.
 
 ## 8. AI coding assistant usage

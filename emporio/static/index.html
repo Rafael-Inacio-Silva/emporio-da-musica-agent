@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Empório da Música</title>
+<link rel="stylesheet" href="/estilo.css">
+</head>
+<body>
+<div class="app">
+  <header class="topo">
+    <div class="marca">
+      <div class="logo" aria-hidden="true">♪</div>
+      <div>
+        <h1>Empório da Música</h1>
+        <p class="slogan">Sua música começa aqui.</p>
+      </div>
+    </div>
+    <div class="acoes">
+      <label class="chave" title="Mostra as ferramentas que o agente chamou em cada resposta">
+        <input type="checkbox" id="mostrar-ferramentas">
+        <span class="trilho" aria-hidden="true"></span>
+        <span>Mostrar ferramentas</span>
+      </label>
+      <button type="button" id="nova-conversa" class="botao-secundario">Nova conversa</button>
+    </div>
+  </header>
+
+  <p id="data-referencia" class="aviso" hidden></p>
+
+  <main id="conversa" class="conversa" aria-live="polite">
+    <section id="inicio" class="inicio">
+      <h2>Oi! Como posso ajudar?</h2>
+      <p>Pergunte sobre instrumentos, preços, formas de pagamento, pedidos, trocas ou horário da loja.</p>
+      <div class="sugestoes">
+        <button type="button" class="sugestao">Quais violões vocês têm até R$ 1.000?</button>
+        <button type="button" class="sugestao">Quanto custa o Takamine GD20?</button>
+        <button type="button" class="sugestao">Qual o endereço e o horário da loja?</button>
+        <button type="button" class="sugestao">Quero devolver um pedido</button>
+      </div>
+    </section>
+  </main>
+
+  <form id="formulario" class="formulario">
+    <textarea id="mensagem" rows="1" maxlength="2000" placeholder="Digite sua mensagem…" aria-label="Mensagem" required></textarea>
+    <button type="submit" id="enviar" class="botao-enviar" aria-label="Enviar">
+      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M3 20.5 21 12 3 3.5l.01 6.6L15 12 3.01 13.9z" fill="currentColor"/></svg>
+    </button>
+  </form>
+</div>
+<script type="module" src="/chat.js"></script>
+</body>
+</html>

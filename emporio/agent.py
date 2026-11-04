@@ -47,6 +47,24 @@ class ToolCall:
     name: str
     arguments: str
 
+    def describe(self) -> str:
+        """Format the call for people, e.g. ``search_products(query="takamine gd20")``.
+
+        Arguments the model left empty (null) are omitted.
+        """
+        try:
+            arguments = json.loads(self.arguments or "{}")
+        except json.JSONDecodeError:
+            return f"{self.name}({self.arguments})"
+        if not isinstance(arguments, dict):
+            return f"{self.name}({self.arguments})"
+        shown = ", ".join(
+            f"{key}={json.dumps(value, ensure_ascii=False)}"
+            for key, value in arguments.items()
+            if value is not None
+        )
+        return f"{self.name}({shown})"
+
 
 @dataclass(frozen=True)
 class AgentReply:
