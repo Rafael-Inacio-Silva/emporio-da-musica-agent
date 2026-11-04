@@ -8,7 +8,7 @@ Prototype of a text-message customer service agent for **Empório da Música**, 
 
 Built for the Artefact AI Engineer technical challenge.
 
-**Status:** step 2 of 6 (tools and business rules, no LLM yet).
+**Status:** step 3 of 6 (agent loop with the OpenAI Responses API; the terminal interface comes in step 4).
 
 ## 2. How to run
 
@@ -37,6 +37,61 @@ Environment variables (`.env.example`):
 | `REFERENCE_DATE` | empty | Optional ISO date that fixes "today" (see [Assumptions](#4-assumptions)). |
 
 ## 3. Technical decisions
+
+### Agent approach
+
+Direct function calling with the official `openai` SDK, in one short module (`emporio/agent.py`). For each customer message the agent:
+
+1. Appends the message to the conversation history.
+2. Sends the system instruction, the whole history and the five tool schemas to the model.
+3. If the model asks for tools, validates and runs them (`execute_tool`) and sends the results back with the same `call_id`.
+4. Repeats step 3 until the model writes a text answer.
+
+Safeguards:
+
+- **Tool-call limit.** At most 5 tool calls per message. After that the request is sent with `tool_choice="none"`, so the model has to answer with what it already has. Five covers search + quote + ticket, and stops a model calling tools in circles.
+- **API errors never reach the customer as a crash.** Connection errors, timeouts (30 s, with the SDK's 2 automatic retries), rate limits and invalid keys become a short apology in Portuguese. The failed message is removed from the history, so no `function_call` is left without its output and the customer can simply try again. The log records only the error type and code: the SDK message for an invalid key contains part of the key.
+
+*Alternative discarded:* LangChain or LangGraph. For one agent with five tools they add dependencies and hide the loop, which is the part worth showing.
+
+### Model and provider
+
+`gpt-6-luna`, OpenAI's model for focused, high-volume tasks and the cheapest of the GPT-6 line. Search, prices and deadlines are computed in code, so the model only has to pick the right tool and write well; a larger model would be paid capacity left unused. Reasoning effort is `low` (the Luna default is `medium`) for faster chat answers. Both are set in `.env`, so switching to the plan B, `gpt-6.1-terra`, needs no code change.
+
+### API
+
+Responses API, not Chat Completions: on GPT-6 Luna, Chat Completions only accepts tools with reasoning disabled.
+
+- **Tool schemas.** They are generated from the Pydantic argument models with `openai.pydantic_function_tool()`, which produces a valid strict-mode schema: every field required, optional fields nullable, no extra properties. That helper returns the Chat Completions envelope (`{"type": "function", "function": {...}}`), so `build_tool_schemas()` moves the fields to the flat format the Responses API expects.
+- **Explicit history.** The history is a plain list of input items built by our code and sent in full on every call, instead of chaining calls with `previous_response_id`. Every item of `response.output`, reasoning items included, is appended before the tool results, as reasoning models require.
+- **Nothing stored at OpenAI.** Requests use `store=False` with `include=["reasoning.encrypted_content"]`, so reasoning items can be sent back without OpenAI keeping customer conversations (policy 9).
+
+### Retrieval: policies in context, data behind tools
+
+The whole policy manual (about 1,700 words) goes in the system instruction, between `<policies>` tags. There is no RAG.
+
+The challenge asks the agent to know *when to query data and when to query policies*. The split follows how each kind of information behaves:
+
+- **Policies** are short and stable, so they are always at hand, and the model decides when to apply them: hours, payment rules, return conditions.
+- **Data** changes (stock, prices, order status), so it stays behind tools, and the model must call a tool to see it.
+
+*Alternative discarded:* RAG over the manual. For a document this short it adds an embedding step, a vector store and the risk of retrieving the wrong section. It becomes the right choice if the manual grows.
+
+### Prompt strategy
+
+- **Three Markdown files** in `prompts/`, outside the Python code:
+  - `persona.md`: identity, tone, scope, contact details and general rules, with tone examples in Portuguese.
+  - `workflow.md`: the five service steps of policy 7.2, when to use each tool, how to read tool results, the special situations of 7.3, and when to hand off to the team.
+  - `policies.md`: the PDF converted to Markdown once, with tables turned into lists. The PDF remains the official source.
+- **One instruction per request.** `build_system_prompt()` joins the three files under titled sections into a single `instructions` parameter, and adds the current day of the week, date, time and whether the store is open, in Campo Grande time.
+  - It is rebuilt on every message, so a long conversation never works with a stale clock.
+  - The fixed parts come first and the time last, so the long unchanging prefix can benefit from the API's prompt caching.
+- **Instructions in English, customer-facing text in Portuguese.** The policies stay in Portuguese, and the agent always answers in Brazilian Portuguese.
+- **The five steps are a guide, not a script.** A customer who opens with a direct question gets a direct answer, without a forced greeting.
+
+### Conversation history
+
+In memory, as the list of input items in `Agent.history`, for the lifetime of the session: in the prototype, one session is one conversation. Within it the agent remembers everything, including tool results. For example, a customer who already verified an order is not asked for the e-mail again. Nothing is kept after the session ends; see [limitations](#7-known-limitations-and-next-steps).
 
 ### Agent tools
 
@@ -102,15 +157,35 @@ Checked with no problems found: duplicated ids, references between tables (order
 - **Price filter.** `max_price` compares against the current price (promotional price when there is an active promotion), since that is what the customer pays.
 - **Shipping in totals.** Quote totals include the shipping fee only when it is known (Campo Grande). PIX applies to the products only; the fee is added after the discount.
 - **Ticket deadline.** Policy 7.3 sets 24 business hours for complaints. The same deadline is used for every ticket type, since the policy gives no other.
-- **Reference date.** Orders go from 2025-10-15 to 2026-03-22. Deadlines such as the 7-day return window only make sense close to that period, so `REFERENCE_DATE` can fix "today" for demonstrations.
+- **Reference date.** Orders go from 2025-10-15 to 2026-03-22. Deadlines such as the 7-day return window only make sense close to that period, so `REFERENCE_DATE` can fix "today" for demonstrations. It replaces only the day: the time of day stays real, so "is the store open now?" still behaves naturally.
+- **Store phone numbers.** Policy 1.2 lists (67) 3341-4444 as "Telefone / WhatsApp", while section 7 gives (67) 3321-4500 as the WhatsApp channel. The agent gives 3341-4444 as the phone and 3321-4500 as WhatsApp, since section 7 is the one specific to that channel.
+- **Store e-mail.** Policy 1.2 spells it `contato@empóriodamusica.com.br` (with an accent), the cover `contato@emporiodamusica.com.br`. The cover version is used: an accent in an e-mail domain is most likely a typo. `prompts/policies.md` keeps the text exactly as in the PDF, and the correct contact details are listed in `prompts/persona.md`.
+- **Partner stores.** Policy 7.1 asks to suggest partner stores "when possible", but no partner is listed anywhere, so the agent never names one.
 
 ## 5. Testing
 
-`pytest` runs 110 deterministic tests, no API key needed:
+`pytest` runs 143 deterministic tests, no API key needed:
 
 - **Data loader** (`tests/test_data_loader.py`): real data loads with the expected types, every product has a brand and category, the phone is not loaded, tracking codes follow policy 5.3, and broken files (missing file, duplicated id, unknown status, broken reference, two active promotions, bad date) are rejected.
 - **Business rules** (`tests/test_rules.py`): PIX and promotional prices with half-up rounding, every installment tier boundary, combined payment above R$ 2,000, local shipping fee, return windows on the last valid day and the day after, opening hours including Sundays and holidays, and 24 business-hour deadlines across weekends.
 - **Tools** (`tests/test_tools.py`): each tool against the real data, including the challenge scenarios (guitars up to R$ 1,000, Takamine GD20, return of a delivered order), privacy (wrong e-mail looks exactly like a missing order), invalid arguments returned as errors, and JSON-serializable results.
+- **Agent loop** (`tests/test_agent.py`): uses a fake OpenAI client with scripted responses, so it costs nothing and always behaves the same. It covers:
+  - a tool result sent back with the same `call_id`;
+  - reasoning items sent back before tool results;
+  - history kept between messages;
+  - invalid arguments returned to the model;
+  - `tool_choice="none"` after the 5-call limit;
+  - a friendly message for each kind of API error;
+  - the history rolled back after a failure;
+  - the API key never written to the log;
+  - flat strict schemas for the five tools.
+- **Prompt and settings** (`tests/test_prompt.py`, `tests/test_config.py`):
+  - section order, and policies inside a single pair of `<policies>` tags;
+  - open/closed status and when the team is back, converted to Campo Grande time;
+  - key facts from the PDF present in `policies.md`;
+  - `.env` parsing, the reference date, and the key hidden from `repr`.
+
+The model's own behavior (choosing tools, applying policies, tone) is shown in the [example conversations](#6-example-conversations), generated by running the real agent.
 
 ## 6. Example conversations
 
@@ -123,6 +198,8 @@ Checked with no problems found: duplicated ids, references between tables (order
 - Only Campo Grande gets the local shipping rule; the other cities of the metropolitan region are not listed in the data.
 - Shipping prices for other cities need the carriers' APIs (CEP, weight and dimensions).
 - Municipal holidays and extended hours on special dates are not modeled.
+- **Conversation memory across sessions.** History lives in memory and ends with the session. In production it would be persisted per WhatsApp number, linked to a verified customer, with a retention period and deletion on request (LGPD, policy 9).
+- **Model routing.** One model answers every message. At larger volume, a cheap router could send simple questions (opening hours) to Luna and complex ones (returns, complaints) to a larger model. At this scale a single model is simpler and more reliable.
 
 ## 8. AI coding assistant usage
 
