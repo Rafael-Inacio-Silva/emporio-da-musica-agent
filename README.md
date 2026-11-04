@@ -8,7 +8,9 @@ Prototype of a text-message customer service agent for **Empório da Música**, 
 
 Built for the Artefact AI Engineer technical challenge.
 
-**Status:** step 4 of 6 (agent with a local chat page; example conversations come in step 5).
+![Chat page with the tool calls shown above each answer](docs/chat.png)
+
+**Status:** step 5 of 6 (agent, local chat page and example conversations; final README review comes in step 6).
 
 ## 2. How to run
 
@@ -35,6 +37,12 @@ Run the tests:
 
 ```bash
 pytest
+```
+
+Regenerate the example conversations in `examples/` (calls the OpenAI API, a few cents):
+
+```bash
+python -m scripts.run_examples
 ```
 
 Environment variables (`.env.example`):
@@ -228,7 +236,25 @@ The model's own behavior (choosing tools, applying policies, tone) is shown in t
 
 ## 6. Example conversations
 
-*To be added in step 5.*
+Five conversations in [`examples/`](examples/), in Portuguese, each with the tools called before every answer (`> tool: ...`):
+
+| File | Scenario | What it shows |
+|---|---|---|
+| [`01-violoes-ate-1000.md`](examples/01-violoes-ate-1000.md) | Guitars up to R$ 1,000 | Catalog search with a price filter, then PIX price, installments and shipping for one model. |
+| [`02-takamine-gd20.md`](examples/02-takamine-gd20.md) | Takamine GD20 price | Price, stock and installments of a specific product. |
+| [`03-devolucao-arrependimento.md`](examples/03-devolucao-arrependimento.md) | Regretted purchase | **The non-trivial case.** The agent asks for the order number and e-mail, checks the order, applies the 7-day return window (delivered on 17/02, open until 24/02), asks whether the customer wants to go ahead, and only then opens a ticket for the team. |
+| [`04-endereco-e-horario.md`](examples/04-endereco-e-horario.md) | Address and hours | Answered from the policies, with no tool call. |
+| [`05-fora-do-escopo.md`](examples/05-fora-do-escopo.md) | Out of scope | Strings (accessories are not sold) and an unrelated question, both declined politely. |
+
+How they were made:
+
+- **Real runs, not written by hand.** `scripts/run_examples.py` sends the scripted customer messages to the real agent (`gpt-6-luna`) and saves the transcripts. Answers were never edited. When one came out wrong, the prompt was fixed and all five were generated again.
+- **Fixed date and time:** Friday, 20/02/2026, 10:00 in Campo Grande, so the opening hours and the return window give the same result on every run. The model's wording can still change between runs; the facts come from the tools.
+- **No side effects:** the return ticket is written to a temporary folder, not to `tickets/`.
+
+What the review caught: in the first run, the agent opened the return ticket as soon as the customer asked *"posso devolver?"*, before they said they wanted to. `workflow.md` now says to ask first, and that a question is not a yes.
+
+The screenshot at the top was taken from the chat page with the same reference date.
 
 ## 7. Known limitations and next steps
 

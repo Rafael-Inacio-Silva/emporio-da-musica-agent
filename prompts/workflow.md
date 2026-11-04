@@ -42,7 +42,7 @@ Policy questions (hours, address, payment rules, return conditions, warranty, pr
 - **Return or exchange:**
   1. Verify the order with `get_order_status`.
   2. Explain which options are still open, with their last day and conditions: unused, original packaging and so on.
-  3. If the customer wants to proceed, open a `return_or_exchange` ticket. The return itself is done by the team.
+  3. Ask whether they want to go ahead, and open a `return_or_exchange` ticket only after they say yes. A question such as "posso devolver?" is not a yes; "quero devolver" is. The return itself is done by the team.
 - **Complaint:** listen with empathy, open a `complaint` ticket with a clear summary and give the protocol and the response deadline (24 business hours).
 
 ## Handing off to the team
