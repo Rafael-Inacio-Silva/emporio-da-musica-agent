@@ -10,18 +10,30 @@ Built for the Artefact AI Engineer technical challenge.
 
 ![Chat page with the tool calls shown above each answer](docs/chat.png)
 
-**Status:** step 5 of 6 (agent, local chat page and example conversations; final README review comes in step 6).
-
 ## 2. How to run
 
-Requirements: Python 3.11+ (developed on 3.14).
+Requirements: Python 3.11 or newer and an OpenAI API key. No Docker, database or Node.js: the store data are CSV files in the repository, and the chat page is served by Python itself.
+
+macOS / Linux:
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate        # Windows: .venv\Scripts\activate
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env             # then fill in OPENAI_API_KEY
 ```
+
+Windows (PowerShell or cmd), without activating the environment:
+
+```bat
+py -m venv .venv
+.venv\Scripts\python -m pip install -r requirements.txt
+copy .env.example .env
+```
+
+Then fill in `OPENAI_API_KEY` in `.env`. On Windows, use `.venv\Scripts\python` wherever the commands below say `python`.
+
+Checked from a fresh clone on macOS with Python 3.11 (all tests pass, the chat answers). Linux and Windows use the same code and dependencies (`tzdata` provides the time zone data Windows lacks, and every file is read as UTF-8), but were not run on those systems.
 
 Start the chat:
 
@@ -36,7 +48,7 @@ To try the order and return scenarios, which use orders from 2025-10 to 2026-03,
 Run the tests:
 
 ```bash
-pytest
+python -m pytest
 ```
 
 Regenerate the example conversations in `examples/` (calls the OpenAI API, a few cents):
@@ -74,7 +86,20 @@ Safeguards:
 
 ### Model and provider
 
-`gpt-6-luna`, OpenAI's model for focused, high-volume tasks and the cheapest of the GPT-6 line. Search, prices and deadlines are computed in code, so the model only has to pick the right tool and write well; a larger model would be paid capacity left unused. Reasoning effort is `low` (the Luna default is `medium`) for faster chat answers. Both are set in `.env`, so switching to the plan B, `gpt-6.1-terra`, needs no code change.
+**OpenAI `gpt-6-luna`, reasoning effort `low`.**
+
+The design decides how much model is needed. Search, prices, installments, shipping and deadlines are computed in code, and the policies are in the prompt. What is left for the model is to understand the customer, pick the right tool, fill its arguments and write a friendly answer in Portuguese. That is a focused, high-volume task, which is what Luna is for:
+
+- **Cost.** Luna is the cheapest model of the GPT-6 line (US$ 0.10 per million input tokens, US$ 0.50 per million output tokens). Measured on the real agent, one model call uses about 5,700 input tokens (mostly the policies) and under 50 output tokens. That is about US$ 0.0006 per call, roughly US$ 1 per thousand customer messages, before the prompt-cache discount: from the second call of a conversation on, almost the whole prompt is served from cache.
+- **Speed.** A customer message takes 2 to 4 seconds end to end, including tool calls. For a chat, latency matters more than extra reasoning.
+- **Reasoning effort `low`** (the Luna default is `medium`). The hard thinking was moved into code, so the model does not need long reasoning to choose between five tools. `low` answered every scenario correctly and keeps answers fast.
+- **Plan B: `gpt-6.1-terra`**, a larger model, if Luna had failed on policies or tone. It was not needed: every problem found while testing (Markdown formatting, a search with too many words, a ticket opened before the customer confirmed) was fixed in the prompt or in a tool, not by a bigger model. Model and effort are read from `.env`, so trying Terra is a one-line change.
+
+**Why OpenAI.** Strict function calling (the API guarantees the arguments match the schema), the Responses API for reasoning models with tools, and an official Python SDK. Anyone with an API key can run the project, with no GPU or model download.
+
+*Alternatives discarded:*
+- **A larger model for everything** (Terra or Sol): more cost and latency for capacity the design does not use.
+- **A local model** (e.g. via Ollama): free per message, but small local models are usually less reliable at tool calling, and the evaluator would need to download several gigabytes and have suitable hardware.
 
 ### API
 
@@ -203,7 +228,7 @@ Checked with no problems found: duplicated ids, references between tables (order
 
 ## 5. Testing
 
-`pytest` runs 161 deterministic tests, no API key needed:
+`python -m pytest` runs 161 deterministic tests, no API key needed:
 
 - **Data loader** (`tests/test_data_loader.py`): real data loads with the expected types, every product has a brand and category, the phone is not loaded, tracking codes follow policy 5.3, and broken files (missing file, duplicated id, unknown status, broken reference, two active promotions, bad date) are rejected.
 - **Business rules** (`tests/test_rules.py`): PIX and promotional prices with half-up rounding, every installment tier boundary, combined payment above R$ 2,000, local shipping fee, return windows on the last valid day and the day after, opening hours including Sundays and holidays, and 24 business-hour deadlines across weekends.
@@ -258,14 +283,62 @@ The screenshot at the top was taken from the chat page with the same reference d
 
 ## 7. Known limitations and next steps
 
-- Product descriptions 135–144 contradict the product names (see data issue 2).
-- Text search matches words, not meaning: a synonym that appears in no product text ("pra começar" instead of "iniciante") depends on the model choosing better search words. Next step: hybrid search with embeddings if the catalog grows.
-- Only Campo Grande gets the local shipping rule; the other cities of the metropolitan region are not listed in the data.
-- Shipping prices for other cities need the carriers' APIs (CEP, weight and dimensions).
-- Municipal holidays and extended hours on special dates are not modeled.
+**Evaluation**
+
+- **No automated evaluation of the model's answers.** The tests cover the code; the model's behavior was checked by hand on the example conversations. Next step: a set of scripted scenarios with expected tool calls and facts, scored automatically on every prompt change, with an LLM as judge for tone and policy compliance.
+
+**Agent**
+
+- **Model routing.** One model answers every message. At larger volume, a cheap router could send simple questions (opening hours) to Luna and complex ones (returns, complaints) to a larger model such as Terra or Sol. At this scale a single model is simpler and more reliable.
+- **RAG if the policy manual grows.** The whole manual fits in the prompt today (about 5,700 tokens per call, mostly cached). A much larger manual would call for retrieving only the relevant sections.
+- **Text search matches words, not meaning.** A synonym that appears in no product text ("pra começar" instead of "iniciante") depends on the model choosing better search words. Next step: hybrid search with embeddings if the catalog grows.
+
+**Production**
+
+- **WhatsApp integration.** The chat page would be replaced by a webhook endpoint; `Agent.reply()` stays the same.
 - **Conversation memory across sessions.** History lives in memory and ends when the server stops. In production it would be persisted per WhatsApp number, linked to a verified customer, with a retention period and deletion on request (LGPD, policy 9).
-- **Model routing.** One model answers every message. At larger volume, a cheap router could send simple questions (opening hours) to Luna and complex ones (returns, complaints) to a larger model. At this scale a single model is simpler and more reliable.
+- **A real database instead of pandas.** Stock and order status change in real time; CSVs loaded at startup do not. SQLite or Postgres, with the same tool functions on top.
+- **Tickets in a local file.** `tickets/tickets.jsonl` stands in for the team's help desk, which a real deployment would call through its API.
+
+**Data and policies**
+
+- Product descriptions 135–144 contradict the product names (see data issue 2).
+- Shipping prices for cities outside Campo Grande need the carriers' APIs (CEP, weight and dimensions); the agent says shipping is calculated separately.
+- Only Campo Grande gets the local shipping rule; the other cities of the metropolitan region are not listed in the data.
+- Municipal holidays and extended hours on special dates are not modeled.
 
 ## 8. AI coding assistant usage
 
-*To be completed in step 6.*
+I used **Claude** (Anthropic) in two roles, and **OpenAI** only as the agent's model at runtime:
+
+| Tool | Used for |
+|---|---|
+| Claude (chat) | Planning: turning the challenge into a project instruction file, before any code. |
+| Claude Code | Execution: writing code, tests and documentation, stage by stage, under my review. |
+| OpenAI API (`gpt-6-luna`) | The model inside the agent. Not used to write the project. |
+
+**The principle: a tool, not a "build everything" button.** I did not attach the challenge and ask for a finished project. I made the decisions, the assistant did most of the typing, and nothing was committed that I had not reviewed and could explain. Small reviewed steps also catch mistakes early, while they are cheap to fix.
+
+**1. Planning first.** I read the whole challenge, then wrote the project's instruction file (`CLAUDE.md`) together with Claude in a chat: I drafted, it suggested, and I accepted, changed or rejected each suggestion until the file said what I wanted. It records:
+- the technical decisions with their reasons (model, API, no RAG, rules in code, privacy);
+- the six stages and the workflow for each one;
+- the rules: language, code style, security (never commit `.env` or print the key, no force-push), and that example conversations must come from real runs.
+
+It is a working file, kept out of the repository; its decisions are the ones justified in [section 3](#3-technical-decisions).
+
+**2. Six stages, each one approved.** Data → rules and tools → agent → interface → examples → README, one commit or more per stage (see the Git history). For every stage:
+1. Claude Code presented a short plan in plain language, and I approved or changed it.
+2. It implemented the stage and ran the tests.
+3. I reviewed the code and tried the result myself.
+4. It updated the README, and committed only after my explicit approval.
+
+Before the agent stage, it checked the current OpenAI documentation, since `gpt-6-luna` and the Responses API are newer than the assistant's training data.
+
+**3. Decisions and corrections that came from me during the work**, for example:
+- Replacing the planned terminal chat with a local browser page, built the same way as a monitoring dashboard I had made before (Python standard library plus plain HTML).
+- Asking how conversation history works, which led to the history section and the memory limitation.
+- Testing the chat myself and finding that *"algum Lendário violão Martin"* returned nothing: search did not look at product descriptions. That became the `fix:` commit.
+- Asking whether that meant embeddings, and deciding against them for now (see [Retrieval](#retrieval-policies-in-context-data-behind-tools)).
+- Asking for a fresh-clone install test, so the instructions above work for someone who has never seen the project.
+
+**4. Learning, not only delivering.** At the end of each stage I asked for a study write-up in Portuguese: what the stage does, the execution flow, each decision with its rejected alternative, and the questions an interviewer would ask. It is kept out of the repository, but it is why I can explain any part of this code.
