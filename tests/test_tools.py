@@ -78,14 +78,18 @@ class TestSearchProducts:
 
     def test_ignores_accents_and_case(self, context: ToolContext) -> None:
         result = call(context, "search_products", query="VIOLAO")
-        assert result["total_found"] == 35
-        assert {product["category"] for product in result["products"]} == {"Violões"}
+        assert result == call(context, "search_products", query="violão")
+        assert result["total_found"] == 36  # 35 violões + a baritone ukulele whose description says "violão"
 
     def test_finds_takamine_gd20(self, context: ToolContext) -> None:
         products = call(context, "search_products", query="takamine gd20")["products"]
         assert [product["product_id"] for product in products] == [95]
         assert products[0]["availability"] == "available"
         assert products[0]["promotion"] is None
+
+    def test_searches_the_description(self, context: ToolContext) -> None:
+        products = call(context, "search_products", query="martin lendário violão")["products"]
+        assert [product["product_id"] for product in products] == [93, 108]
 
     def test_brand_filter(self, context: ToolContext) -> None:
         products = call(context, "search_products", brand="yamaha")["products"]

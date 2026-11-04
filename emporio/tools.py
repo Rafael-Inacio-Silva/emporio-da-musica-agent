@@ -86,8 +86,8 @@ class ToolArgs(BaseModel):
 class SearchProductsArgs(ToolArgs):
     query: str | None = Field(
         default=None,
-        description="Words from the product name, model or brand, e.g. 'takamine gd20'. "
-        "Use category for the instrument type.",
+        description="Words from the product name, model, brand or description, e.g. 'takamine gd20' "
+        "or 'iniciante'. Every word must match. Use category for the instrument type.",
     )
     category: CategoryName | None = Field(default=None, description="Instrument category.")
     brand: str | None = Field(default=None, description="Brand name, e.g. 'Yamaha'.")
@@ -140,7 +140,8 @@ def search_products(args: SearchProductsArgs, context: ToolContext) -> dict[str,
     if args.query:
         search_text = (
             products["name"] + " " + products["brand"].fillna("") + " "
-            + products["category"].map(CATEGORY_SEARCH_TERMS).fillna("")
+            + products["category"].map(CATEGORY_SEARCH_TERMS).fillna("") + " "
+            + products["description"].fillna("")
         ).map(normalize_text)
         for token in normalize_text(args.query).split():
             matches = search_text.str.contains(token, regex=False)
