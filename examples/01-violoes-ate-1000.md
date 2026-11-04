@@ -10,7 +10,7 @@
 
 > `tool: search_products(category="Violões", max_price=1000)`
 
-**Agente:** Temos estas opções disponíveis por até R$ 1.000:
+**Agente:** Oi! Eu sou a Lia, assistente virtual da Empório da Música. Estas opções de violão até R$ 1.000 estão disponíveis:
 
 - Tagima Memphis AC-39 Nylon Natural — R$ 429,90
 - Rozini RC-104 Nylon Estudante — R$ 459,90
@@ -23,7 +23,7 @@
 - Shelby SGD-195E Elétrico Aço Sunburst — R$ 799,00
 - Yamaha C70 Nylon Natural — R$ 849,00
 
-Tem opções de nylon, aço e até eletroacústico. Quer que eu te ajude a escolher pelo estilo que você pretende tocar?
+Quer que eu te ajude a escolher entre nylon, aço ou eletroacústico?
 
 ---
 
@@ -33,6 +33,4 @@ Tem opções de nylon, aço e até eletroacústico. Quer que eu te ajude a escol
 >
 > `tool: get_price_quote(product_id=81, quantity=1, city="Campo Grande")`
 
-**Agente:** O Yamaha C40 fica R$ 569,91 no PIX. No cartão, dá para parcelar em até 6x de R$ 99,98 sem juros.
-
-Para Campo Grande, o frete está grátis, com entrega estimada em 1 a 3 dias úteis.
+**Agente:** O Yamaha C40 fica por R$ 569,91 no PIX. No cartão, dá para parcelar em até 6x de R$ 99,98 sem juros. Para Campo Grande, o frete está grátis, com entrega estimada de 1 a 3 dias úteis. Posso ajudar com mais alguma coisa?

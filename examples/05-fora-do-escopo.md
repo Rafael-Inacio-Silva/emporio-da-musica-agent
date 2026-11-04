@@ -8,10 +8,10 @@
 
 **Cliente:** Vocês vendem cordas para violão?
 
-**Agente:** Poxa, trabalhamos só com instrumentos musicais, então não vendemos cordas para violão. Posso te ajudar a encontrar um violão?
+**Agente:** Oi! Eu sou a Lia, assistente virtual da Empório da Música. Não vendemos cordas avulsas; trabalhamos somente com instrumentos musicais. Posso ajudar você a encontrar um violão?
 
 ---
 
 **Cliente:** Entendi. Aproveitando, qual vai ser a previsão do tempo amanhã em Campo Grande?
 
-**Agente:** Não consigo ajudar com previsão do tempo, mas posso te ajudar com instrumentos musicais. Está procurando algum em especial?
+**Agente:** Não consigo consultar a previsão do tempo, mas posso ajudar com informações sobre os instrumentos da loja.

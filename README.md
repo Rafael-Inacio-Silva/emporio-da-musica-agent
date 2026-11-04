@@ -4,7 +4,7 @@
 
 ## 1. Overview
 
-Prototype of a text-message customer service agent for **Empório da Música**, a fictional musical instrument store in Campo Grande/MS. The agent resolves recurring questions on its own (opening hours, order status, product price and availability) by querying store data and applying the store policies, and hands off to the team only for exceptions such as complaints, returns or cases the policy does not cover.
+Prototype of a text-message customer service agent for **Empório da Música**, a fictional musical instrument store in Campo Grande/MS. The agent, **Lia**, resolves recurring questions on its own (opening hours, order status, product price and availability) by querying store data and applying the store policies, and hands off to the team only for exceptions such as complaints, returns or cases the policy does not cover.
 
 Built for the Artefact AI Engineer technical challenge.
 
@@ -133,6 +133,7 @@ The challenge asks the agent to know *when to query data and when to query polic
 - **One instruction per request.** `build_system_prompt()` joins the three files under titled sections into a single `instructions` parameter, and adds the current day of the week, date, time and whether the store is open, in Campo Grande time.
   - It is rebuilt on every message, so a long conversation never works with a stale clock.
   - The fixed parts come first and the time last, so the long unchanging prefix can benefit from the API's prompt caching.
+- **A named persona: Lia.** She introduces herself once, in her first reply, as the store's virtual assistant, and answers the question in that same message. The name gives the store a voice, and the introduction tells the customer they are talking to an AI: policy 7 says WhatsApp service can be done by people or by the virtual assistant. If asked whether she is human, she says she is not and offers the team.
 - **Instructions in English, customer-facing text in Portuguese.** The policies stay in Portuguese, and the agent always answers in Brazilian Portuguese.
 - **The five steps are a guide, not a script.** A customer who opens with a direct question gets a direct answer, without a forced greeting.
 
@@ -277,7 +278,10 @@ How they were made:
 - **Fixed date and time:** Friday, 20/02/2026, 10:00 in Campo Grande, so the opening hours and the return window give the same result on every run. The model's wording can still change between runs; the facts come from the tools.
 - **No side effects:** the return ticket is written to a temporary folder, not to `tickets/`.
 
-What the review caught: in the first run, the agent opened the return ticket as soon as the customer asked *"posso devolver?"*, before they said they wanted to. `workflow.md` now says to ask first, and that a question is not a yes.
+What the review caught, each fixed in `workflow.md` and followed by a new run of all five:
+
+- **Ticket before consent.** The agent opened the return ticket as soon as the customer asked *"posso devolver?"*, before they said they wanted to. It now asks first, and a question is not a yes.
+- **Missing closing step.** Policy 7.2 ends with "confirm whether the customer needs anything else". The agent rarely did it. After the first fix it overdid it, asking in every message, so the rule now says: once a request is solved, at most once in a row, and not when the message already ends with another question.
 
 The screenshot at the top was taken from the chat page with the same reference date.
 
