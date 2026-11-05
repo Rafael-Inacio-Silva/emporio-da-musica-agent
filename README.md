@@ -283,7 +283,7 @@ What the review caught, each fixed in `workflow.md` and followed by a new run of
 - **Ticket before consent.** The agent opened the return ticket as soon as the customer asked *"posso devolver?"*, before they said they wanted to. It now asks first, and a question is not a yes.
 - **Missing closing step.** Policy 7.2 ends with "confirm whether the customer needs anything else". The agent rarely did it. After the first fix it overdid it, asking in every message, so the rule now says: once a request is solved, at most once in a row, and not when the message already ends with another question.
 
-The screenshot at the top was taken from the chat page with the same reference date.
+The screenshot at the top shows the chat page (its own HTML and CSS) with a real conversation from the agent, run with the same reference date.
 
 ## 7. Known limitations and next steps
 
@@ -300,6 +300,7 @@ The screenshot at the top was taken from the chat page with the same reference d
 **Production**
 
 - **WhatsApp integration.** The chat page would be replaced by a webhook endpoint; `Agent.reply()` stays the same.
+- **Personalization by name.** Lia uses the customer's first name only after an order is verified (the order tool returns it). She does not ask for the name at the start, and customers are never looked up by name (policy 9). With WhatsApp, the sender's number could identify a returning customer, so Lia could greet them by name from the first message, with the privacy rules of policy 9 still deciding what else she may share.
 - **Conversation memory across sessions.** History lives in memory and ends when the server stops. In production it would be persisted per WhatsApp number, linked to a verified customer, with a retention period and deletion on request (LGPD, policy 9).
 - **A real database instead of pandas.** Stock and order status change in real time; CSVs loaded at startup do not. SQLite or Postgres, with the same tool functions on top.
 - **Tickets in a local file.** `tickets/tickets.jsonl` stands in for the team's help desk, which a real deployment would call through its API.
