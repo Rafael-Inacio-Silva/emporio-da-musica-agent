@@ -8,10 +8,10 @@
 
 **Cliente:** Qual o endereço da loja?
 
-**Agente:** Oi! Eu sou a Lia, assistente virtual da Empório da Música. A loja fica na Rua 14 de Maio, 3200 — Centro, Campo Grande - MS, CEP 79202-333. Posso ajudar com mais alguma coisa?
+**Agente:** Oi! Eu sou a Lia, assistente virtual da Empório da Música. A loja fica na Rua 14 de Maio, 3200 — Centro, Campo Grande - MS, CEP 79202-333.
 
 ---
 
 **Cliente:** E vocês abrem no sábado? Até que horas?
 
-**Agente:** Sim! Aos sábados, a loja abre das 9h às 13h.
+**Agente:** Sim! Aos sábados, a loja abre das 09h às 13h.

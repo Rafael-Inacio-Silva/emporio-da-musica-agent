@@ -127,15 +127,15 @@ The challenge asks the agent to know *when to query data and when to query polic
 ### Prompt strategy
 
 - **Three Markdown files** in `prompts/`, outside the Python code:
-  - `persona.md`: identity, tone, scope, contact details and general rules, with tone examples in Portuguese.
-  - `workflow.md`: the five service steps of policy 7.2, when to use each tool, how to read tool results, the special situations of 7.3, and when to hand off to the team.
+  - `persona.md`: identity, introduction, tone, scope, contact details, how to buy, and the critical rules on prices and safety.
+  - `workflow.md`: the five service stages of policy 7.2, when to use each tool, how to read tool results, the special situations of 7.3, out-of-hours behavior, and when to hand off to the team.
   - `policies.md`: the PDF converted to Markdown once, with tables turned into lists. The PDF remains the official source.
 - **One instruction per request.** `build_system_prompt()` joins the three files under titled sections into a single `instructions` parameter, and adds the current day of the week, date, time and whether the store is open, in Campo Grande time.
   - It is rebuilt on every message, so a long conversation never works with a stale clock.
   - The fixed parts come first and the time last, so the long unchanging prefix can benefit from the API's prompt caching.
 - **A named persona: Lia.** She introduces herself once, in her first reply, as the store's virtual assistant, and answers the question in that same message. The name gives the store a voice, and the introduction tells the customer they are talking to an AI: policy 7 says WhatsApp service can be done by people or by the virtual assistant. If asked whether she is human, she says she is not and offers the team.
-- **Instructions in English, customer-facing text in Portuguese.** The policies stay in Portuguese, and the agent always answers in Brazilian Portuguese.
-- **The five steps are a guide, not a script.** A customer who opens with a direct question gets a direct answer, without a forced greeting.
+- **Written in my own prompt format, in Portuguese.** The prompt files follow the structure I use in my customer-service agents: blocks with uppercase titles, short bullet rules, quoted example phrases, critical restrictions marked with ⚠️, and each service step written as a stage (`Estágio`, `Nome`, `Objetivo`, `Instrução`, `Avance somente quando`). Rules in short bullets are easier to review and change than paragraphs, and the language matches the policies and the customer. The agent always answers in Brazilian Portuguese. Tool and field names stay in English, as in the code.
+- **The five stages are a guide, not a script.** A customer who opens with a direct question gets a direct answer, without a forced greeting.
 
 ### Interface
 

@@ -10,14 +10,12 @@
 
 > `tool: search_products(query="Takamine GD20", category="Violões", brand="Takamine")`
 
-**Agente:** Oi! Eu sou a Lia, assistente virtual da Empório da Música. O Takamine GD20 Dreadnought Natural custa R$ 2.199,00 e está disponível. Posso consultar as formas de pagamento?
+**Agente:** Oi! Eu sou a Lia, assistente virtual da Empório da Música. O Takamine GD20 Dreadnought Natural custa R$ 2.199,00 e está disponível. Posso consultar as formas de pagamento e o frete para você?
 
 ---
 
 **Cliente:** Tem em estoque? Dá pra parcelar sem juros?
 
-> `tool: search_products(query="Takamine GD20", category="Violões", brand="Takamine")`
->
 > `tool: get_price_quote(product_id=95, quantity=1)`
 
-**Agente:** Sim, temos 5 unidades em estoque. Dá para parcelar em até 12x sem juros de R$ 183,25 no cartão. Posso ajudar com mais alguma coisa?
+**Agente:** Sim, tem 5 unidades em estoque. Dá para parcelar sem juros em até 12x de R$ 183,25 no cartão. O frete é calculado à parte. Posso ajudar com mais alguma coisa?
